@@ -24,36 +24,36 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-import org.dbunit.database.IMetadataHandler;
 import org.dbunit.util.SQLHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Special metadata handler for MySQL.<br/>
- * Was introduced to fix "[ 2545095 ] Mysql FEATURE_QUALIFIED_TABLE_NAMES column SQLHelper.matches".
- * 
+ * Default implementation of {@link IMetadataHandler} which works for the most databases.
  * @author gommma (gommma AT users.sourceforge.net)
  * @author Last changed by: $Author$
  * @version $Revision$ $Date$
  * @since 2.4.4
  */
-public class DefaultMetadataHandler implements IMetadataHandler {
+public class DefaultMetadataHandler2 implements IMetadataHandler {
 
     /**
      * Logger for this class
      */
-    private static final Logger logger = LoggerFactory.getLogger(DefaultMetadataHandler.class);
+    private static final Logger logger = LoggerFactory.getLogger(DefaultMetadataHandler2.class);
 
     public ResultSet getColumns(DatabaseMetaData databaseMetaData, String schemaName, String tableName) 
-    throws SQLException {
-        // Note that MySQL uses the catalogName instead of the schemaName, so
-        // pass in the given schema name as catalog name (first argument).
+    throws SQLException 
+    {
+        if(logger.isTraceEnabled())
+            logger.trace("getColumns(databaseMetaData={}, schemaName={}, tableName={}) - start", 
+                    new Object[] {databaseMetaData, schemaName, tableName} );
+        
         ResultSet resultSet = databaseMetaData.getColumns(
-                schemaName, null, tableName, "%");
+                null, schemaName, tableName, "%");
         return resultSet;
     }
-    
+
     public boolean matches(ResultSet resultSet,
             String schema, String table, boolean caseSensitive) 
     throws SQLException 
@@ -65,23 +65,34 @@ public class DefaultMetadataHandler implements IMetadataHandler {
             String schema, String table, String column,
             boolean caseSensitive) throws SQLException 
     {
+        if(logger.isTraceEnabled())
+            logger.trace("matches(columnsResultSet={}, catalog={}, schema={}," +
+            		" table={}, column={}, caseSensitive={}) - start", 
+                    new Object[] {columnsResultSet, catalog, schema, 
+                            table, column, Boolean.valueOf(caseSensitive)});
+        
         String catalogName = columnsResultSet.getString(1);
         String schemaName = columnsResultSet.getString(2);
         String tableName = columnsResultSet.getString(3);
         String columnName = columnsResultSet.getString(4);
 
-        // MYSQL provides only a catalog but no schema
-        if(schema != null && schemaName == null && catalog==null && catalogName != null){
-            logger.debug("Switching catalog/schema because the are mutually null");
-            schemaName = catalogName;
-            catalogName = null;
+        if(logger.isDebugEnabled()){
+            logger.debug("Comparing the following values using caseSensitive={} (searched<=>actual): " +
+                    "catalog: {}<=>{} schema: {}<=>{} table: {}<=>{} column: {}<=>{}", 
+                    new Object[] {
+                        Boolean.valueOf(caseSensitive),
+                        catalog, catalogName,
+                        schema, schemaName,
+                        table, tableName,
+                        column, columnName
+                    });
         }
         
         boolean areEqual = 
-            areEqualIgnoreNull(catalog, catalogName, caseSensitive) &&
-            areEqualIgnoreNull(schema, schemaName, caseSensitive) &&
-            areEqualIgnoreNull(table, tableName, caseSensitive) &&
-            areEqualIgnoreNull(column, columnName, caseSensitive);
+                areEqualIgnoreNull(catalog, catalogName, caseSensitive) &&
+                areEqualIgnoreNull(schema, schemaName, caseSensitive) &&
+                areEqualIgnoreNull(table, tableName, caseSensitive) &&
+                areEqualIgnoreNull(column, columnName, caseSensitive);
         return areEqual;
     }
 
@@ -91,21 +102,21 @@ public class DefaultMetadataHandler implements IMetadataHandler {
     }
 
     public String getSchema(ResultSet resultSet) throws SQLException {
-        String catalogName = resultSet.getString(1);
+        if(logger.isTraceEnabled())
+            logger.trace("getColumns(resultSet={}) - start", resultSet);
+
         String schemaName = resultSet.getString(2);
-        
-        // Fix schema/catalog for mysql. Normally the schema is not set but only the catalog is set
-        if(schemaName == null && catalogName != null) {
-            logger.debug("Using catalogName '" + catalogName + "' as schema since the schema is null but the catalog is set (probably in a MySQL environment).");
-            schemaName = catalogName;
-        }
         return schemaName;
     }
-
-    public boolean tableExists(DatabaseMetaData metaData, String schema, String tableName) 
+    
+    public boolean tableExists(DatabaseMetaData metaData, String schemaName, String tableName) 
     throws SQLException 
     {
-        ResultSet tableRs = metaData.getTables(schema, null, tableName, null);
+        if(logger.isTraceEnabled())
+            logger.trace("tableExists(metaData={}, schemaName={}, tableName={}) - start", 
+                    new Object[] {metaData, schemaName, tableName} );
+        
+        ResultSet tableRs = metaData.getTables(null, schemaName, tableName, null);
         try 
         {
             return tableRs.next();
@@ -120,10 +131,10 @@ public class DefaultMetadataHandler implements IMetadataHandler {
     throws SQLException
     {
         if(logger.isTraceEnabled())
-            logger.trace("tableExists(metaData={}, schemaName={}, tableType={}) - start", 
+            logger.trace("getTables(metaData={}, schemaName={}, tableType={}) - start", 
                     new Object[] {metaData, schemaName, tableType} );
 
-        return metaData.getTables(schemaName, null, "%", tableType);
+        return metaData.getTables(null, schemaName, "%", tableType);
     }
 
     public ResultSet getPrimaryKeys(DatabaseMetaData metaData, String schemaName, String tableName) 
@@ -134,7 +145,7 @@ public class DefaultMetadataHandler implements IMetadataHandler {
                     new Object[] {metaData, schemaName, tableName} );
 
         ResultSet resultSet = metaData.getPrimaryKeys(
-                schemaName, null, tableName);
+                null, schemaName, tableName);
         return resultSet;
     }
 
